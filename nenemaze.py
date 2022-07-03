@@ -5,9 +5,10 @@ from direct.interval.FunctionInterval import Func, Wait
 from direct.interval.LerpInterval import LerpFunc
 from direct.interval.MetaInterval import Parallel, Sequence
 from direct.showbase.ShowBase import ShowBase
-from panda3d.core import (BitMask32, CollisionBox, CollisionHandlerQueue,
-                          CollisionNode, CollisionRay, CollisionTraverser,
-                          LRotationf, LVector3, Point3, TextNode)
+from panda3d.core import (AmbientLight, BitMask32, CollisionBox,
+                          CollisionHandlerQueue, CollisionNode, CollisionRay,
+                          CollisionTraverser, DirectionalLight, LRotationf,
+                          LVector3, Material, Point3, TextNode)
 
 
 class NeneMaze(ShowBase):
@@ -26,6 +27,7 @@ class NeneMaze(ShowBase):
         self._init_maze()
         self._init_ball()
         self._init_goal()
+        self._init_light()
 
         self._start()
 
@@ -90,6 +92,21 @@ class NeneMaze(ShowBase):
         self._goal_col.addSolid(CollisionBox(Point3(0, 0, 0), 3, 3, 3))
         self._goal_col.setIntoCollideMask(BitMask32.bit(0))
         _ = self._goal.attachNewNode(self._goal_col)
+
+    def _init_light(self):
+        ambient_light = AmbientLight('ambientLight')
+        ambient_light.setColor((0.55, 0.55, 0.55, 1))
+        directional_light = DirectionalLight('directionalLight')
+        directional_light.setDirection(LVector3(0, 0, -1))
+        directional_light.setColor((0.375, 0.375, 0.375, 1))
+        directional_light.setSpecularColor((1, 1, 1, 1))
+        self._ball_root.setLight(render.attachNewNode(ambient_light))  # noqa: F821
+        self._ball_root.setLight(render.attachNewNode(directional_light))  # noqa: F821
+
+        material = Material()
+        material.setSpecular((1, 1, 1, 1))
+        material.setShininess(96)
+        self._ball.setMaterial(material, 1)
 
     def _start(self):
         start_pos = self._maze.find('**/start').getPos()
