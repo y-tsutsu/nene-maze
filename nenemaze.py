@@ -16,12 +16,14 @@ class NeneMaze(ShowBase):
         self._view_text()
         self._create_maze()
 
+        self._start()
+
     def _view_text(self):
         font = loader.loadFont('/c/Windows/Fonts/YuGothM.ttc')  # noqa: F821
         self.title = OnscreenText(text='ねねっちの迷路',
                                   parent=base.a2dBottomRight, align=TextNode.ARight,  # noqa: F821
                                   fg=(1, 1, 1, 1), pos=(-0.1, 0.1), scale=.08, font=font, shadow=(0, 0, 0, 0.5))
-        self.instructions = OnscreenText(text='マウスを動かすと迷路を傾けることができます',
+        self.instructions = OnscreenText(text='えーー！なるっちの担当箇所がバグだらけ！？',
                                          parent=base.a2dTopLeft, align=TextNode.ALeft,  # noqa: F821
                                          fg=(1, 1, 1, 1), pos=(0.1, -0.15), scale=.06, font=font, shadow=(0, 0, 0, 0.5))
 
@@ -41,6 +43,21 @@ class NeneMaze(ShowBase):
             trigger.node().setIntoCollideMask(BitMask32.bit(0))
             trigger.node().setName('loseTrigger')
             self._lose_triggers.append(trigger)
+
+    def _start(self):
+        taskMgr.remove('rollTask')  # noqa: F821
+        self.mainLoop = taskMgr.add(self._rollTask, 'rollTask')  # noqa: F821
+
+    def _rollTask(self, task):
+        dt = globalClock.getDt()  # noqa: F821
+        if dt > 0.2:
+            return task.cont
+
+        if base.mouseWatcherNode.hasMouse():  # noqa: F821
+            mpos = base.mouseWatcherNode.getMouse()  # noqa: F821
+            self._maze.setP(mpos.getY() * -10)
+            self._maze.setR(mpos.getX() * 10)
+        return task.cont
 
 
 def main():
