@@ -1,0 +1,20 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+panda3d = "*"
+
+[dev-packages]
+autopep8 = "*"
+flake8 = "*"
+rope = "*"
+
+[requires]
+python_version = "3.10"
+
+[scripts]
+start = "python nenemaze.py"
+format = "autopep8 -ivr ."
+lint = "flake8 --show-source ."
