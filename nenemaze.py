@@ -1,6 +1,9 @@
 import sys
 
 from direct.gui.OnscreenText import OnscreenText
+from direct.interval.FunctionInterval import Func, Wait
+from direct.interval.LerpInterval import LerpFunc
+from direct.interval.MetaInterval import Parallel, Sequence
 from direct.showbase.ShowBase import ShowBase
 from panda3d.core import (BitMask32, CollisionHandlerQueue, CollisionNode,
                           CollisionRay, CollisionTraverser, LRotationf,
@@ -142,7 +145,12 @@ class NeneMaze(ShowBase):
         self._accel_v = norm.cross(accelSide)
 
     def _lose_game(self, entry):
-        pass
+        to_pos = entry.getInteriorPoint(render)  # noqa: F821
+        taskMgr.remove('rollTask')  # noqa: F821
+        Sequence(Parallel(LerpFunc(self._ball_root.setX, fromData=self._ball_root.getX(), toData=to_pos.getX(), duration=0.1),
+                          LerpFunc(self._ball_root.setY, fromData=self._ball_root.getY(), toData=to_pos.getY(), duration=0.1),
+                          LerpFunc(self._ball_root.setZ, fromData=self._ball_root.getZ(), toData=self._ball_root.getZ() - 0.9, duration=0.2)),
+                 Wait(1), Func(self._start)).start()
 
     def _win_game(self, entry):
         pass
