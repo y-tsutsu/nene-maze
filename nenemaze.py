@@ -2,10 +2,16 @@ import sys
 
 from direct.gui.OnscreenText import OnscreenText
 from direct.showbase.ShowBase import ShowBase
-from panda3d.core import BitMask32, TextNode
+from panda3d.core import (BitMask32, CollisionHandlerQueue, CollisionNode,
+                          CollisionRay, CollisionTraverser, LRotationf,
+                          LVector3, TextNode)
 
 
 class NeneMaze(ShowBase):
+    ACCEL = 70
+    MAX_SPEED = 5
+    MAX_SPEED_SQ = MAX_SPEED ** 2
+
     def __init__(self):
         super().__init__(self)
 
@@ -14,7 +20,8 @@ class NeneMaze(ShowBase):
         self.accept('escape', sys.exit)
 
         self._view_text()
-        self._create_maze()
+        self._init_maze()
+        self._init_ball()
 
         self._start()
 
@@ -27,8 +34,8 @@ class NeneMaze(ShowBase):
                                          parent=base.a2dTopLeft, align=TextNode.ALeft,  # noqa: F821
                                          fg=(1, 1, 1, 1), pos=(0.1, -0.15), scale=.06, font=font, shadow=(0, 0, 0, 0.5))
 
-    def _create_maze(self):
-        self._maze = loader.loadModel('models/maze')   # noqa: F821
+    def _init_maze(self):
+        self._maze = loader.loadModel('models/maze')  # noqa: F821
         self._maze.reparentTo(render)  # noqa: F821
 
         self._walls = self._maze.find('**/wall_collide')
@@ -44,20 +51,101 @@ class NeneMaze(ShowBase):
             trigger.node().setName('loseTrigger')
             self._lose_triggers.append(trigger)
 
-    def _start(self):
-        taskMgr.remove('rollTask')  # noqa: F821
-        self.mainLoop = taskMgr.add(self._rollTask, 'rollTask')  # noqa: F821
+    def _init_ball(self):
+        self._ball_root = render.attachNewNode('ballRoot')  # noqa: F821
+        self._ball = loader.loadModel('models/ball')  # noqa: F821
+        self._ball.reparentTo(self._ball_root)
 
-    def _rollTask(self, task):
+        self._ball_sphere = self._ball.find('**/ball')
+        self._ball_sphere.node().setFromCollideMask(BitMask32.bit(0))
+        self._ball_sphere.node().setIntoCollideMask(BitMask32.allOff())
+
+        self._ball_groundRay = CollisionRay()
+        self._ball_groundRay.setOrigin(0, 0, 10)
+        self._ball_groundRay.setDirection(0, 0, -1)
+
+        self._ball_ground_col = CollisionNode('groundRay')
+        self._ball_ground_col.addSolid(self._ball_groundRay)
+        self._ball_ground_col.setFromCollideMask(BitMask32.bit(1))
+        self._ball_ground_col.setIntoCollideMask(BitMask32.allOff())
+        self._ball_ground_col_np = self._ball_root.attachNewNode(self._ball_ground_col)
+
+        self._ctrav = CollisionTraverser()
+        self._chandler = CollisionHandlerQueue()
+        self._ctrav.addCollider(self._ball_sphere, self._chandler)
+        self._ctrav.addCollider(self._ball_ground_col_np, self._chandler)
+        self.pushCTrav(self._ctrav)
+
+    def _start(self):
+        start_pos = self._maze.find('**/start').getPos()
+        self._ball_root.setPos(start_pos)
+        self._ball_v = LVector3(0, 0, 0)
+        self._accel_v = LVector3(0, 0, 0)
+
+        taskMgr.remove('rollTask')  # noqa: F821
+        self.mainLoop = taskMgr.add(self._roll_task, 'rollTask')  # noqa: F821
+
+    def _roll_task(self, task):
         dt = globalClock.getDt()  # noqa: F821
         if dt > 0.2:
             return task.cont
+
+        for i in range(self._chandler.getNumEntries()):
+            entry = self._chandler.getEntry(i)
+            name = entry.getIntoNode().getName()
+            if name == 'wall_collide':
+                self._wall_collide_handler(entry)
+            elif name == 'ground_collide':
+                self._ground_collide_handler(entry)
+            elif name == 'loseTrigger':
+                self._lose_game(entry)
+            elif name == 'goalCol':
+                self._win_game(entry)
+
+        self._ball_v += self._accel_v * dt * NeneMaze.ACCEL
+        if self._ball_v.lengthSquared() > NeneMaze.MAX_SPEED_SQ:
+            self._ball_v.normalize()
+            self._ball_v *= NeneMaze.MAX_SPEED
+        self._ball_root.setPos(self._ball_root.getPos() + (self._ball_v * dt))
+        prevRot = LRotationf(self._ball.getQuat())
+        axis = LVector3.up().cross(self._ball_v)
+        newRot = LRotationf(axis, 45.5 * dt * self._ball_v.length())
+        self._ball.setQuat(prevRot * newRot)
 
         if base.mouseWatcherNode.hasMouse():  # noqa: F821
             mpos = base.mouseWatcherNode.getMouse()  # noqa: F821
             self._maze.setP(mpos.getY() * -10)
             self._maze.setR(mpos.getX() * 10)
         return task.cont
+
+    def _wall_collide_handler(self, col_entry):
+        norm = col_entry.getSurfaceNormal(render) * -1  # noqa: F821
+        cur_speed = self._ball_v.length()
+        in_vec = self._ball_v / cur_speed
+        vel_angle = norm.dot(in_vec)
+        hit_dir = col_entry.getSurfacePoint(render) - self._ball_root.getPos()  # noqa: F821
+        hit_dir.normalize()
+        hit_angle = norm.dot(hit_dir)
+
+        if vel_angle > 0 and hit_angle > 0.995:
+            reflect_vec = (norm * norm.dot(in_vec * -1) * 2) + in_vec
+            self._ball_v = reflect_vec * (cur_speed * (((1 - vel_angle) * 0.5) + 0.5))
+            disp = (col_entry.getSurfacePoint(render) - col_entry.getInteriorPoint(render))  # noqa: F821
+            new_pos = self._ball_root.getPos() + disp
+            self._ball_root.setPos(new_pos)
+
+    def _ground_collide_handler(self, col_entry):
+        new_z = col_entry.getSurfacePoint(render).getZ()  # noqa: F821
+        self._ball_root.setZ(new_z + 0.4)
+        norm = col_entry.getSurfaceNormal(render)  # noqa: F821
+        accelSide = norm.cross(LVector3.up())
+        self._accel_v = norm.cross(accelSide)
+
+    def _lose_game(self, entry):
+        pass
+
+    def _win_game(self, entry):
+        pass
 
 
 def main():
