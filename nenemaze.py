@@ -1,3 +1,4 @@
+import builtins
 import sys
 
 from direct.gui.OnscreenText import OnscreenText
@@ -20,7 +21,7 @@ class NeneMaze(ShowBase):
         super().__init__(self)
 
         self.disableMouse()
-        camera.setPosHpr(11, -11, 25, 45, -60, 0)  # noqa: F821
+        self.camera.setPosHpr(11, -11, 25, 45, -60, 0)
         self.accept('escape', sys.exit)
 
         self._view_text()
@@ -32,17 +33,17 @@ class NeneMaze(ShowBase):
         self._start()
 
     def _view_text(self):
-        font = loader.loadFont('/c/Windows/Fonts/YuGothM.ttc')  # noqa: F821
+        font = self.loader.loadFont('/c/Windows/Fonts/YuGothM.ttc')
         self.title = OnscreenText(text='ねねっちの迷路',
-                                  parent=base.a2dBottomRight, align=TextNode.ARight,  # noqa: F821
+                                  parent=self.a2dBottomRight, align=TextNode.ARight,
                                   fg=(1, 1, 1, 1), pos=(-0.1, 0.1), scale=.08, font=font, shadow=(0, 0, 0, 0.5))
         self.instructions = OnscreenText(text='えーー！なるっちの担当箇所がバグだらけ！？',
-                                         parent=base.a2dTopLeft, align=TextNode.ALeft,  # noqa: F821
+                                         parent=self.a2dTopLeft, align=TextNode.ALeft,
                                          fg=(1, 1, 1, 1), pos=(0.1, -0.15), scale=.06, font=font, shadow=(0, 0, 0, 0.5))
 
     def _init_maze(self):
-        self._maze = loader.loadModel('models/maze')  # noqa: F821
-        self._maze.reparentTo(render)  # noqa: F821
+        self._maze = self.loader.loadModel('models/maze')
+        self._maze.reparentTo(self.render)
 
         self._walls = self._maze.find('**/wall_collide')
         self._walls.node().setIntoCollideMask(BitMask32.bit(0))
@@ -58,8 +59,8 @@ class NeneMaze(ShowBase):
             self._lose_triggers.append(trigger)
 
     def _init_ball(self):
-        self._ball_root = render.attachNewNode('ballRoot')  # noqa: F821
-        self._ball = loader.loadModel('models/ball')  # noqa: F821
+        self._ball_root = self.render.attachNewNode('ballRoot')
+        self._ball = self.loader.loadModel('models/ball')
         self._ball.reparentTo(self._ball_root)
 
         self._ball_sphere = self._ball.find('**/ball')
@@ -100,8 +101,8 @@ class NeneMaze(ShowBase):
         directional_light.setDirection(LVector3(0, 0, -1))
         directional_light.setColor((0.375, 0.375, 0.375, 1))
         directional_light.setSpecularColor((1, 1, 1, 1))
-        self._ball_root.setLight(render.attachNewNode(ambient_light))  # noqa: F821
-        self._ball_root.setLight(render.attachNewNode(directional_light))  # noqa: F821
+        self._ball_root.setLight(self.render.attachNewNode(ambient_light))
+        self._ball_root.setLight(self.render.attachNewNode(directional_light))
 
         material = Material()
         material.setSpecular((1, 1, 1, 1))
@@ -114,11 +115,11 @@ class NeneMaze(ShowBase):
         self._ball_v = LVector3(0, 0, 0)
         self._accel_v = LVector3(0, 0, 0)
 
-        taskMgr.remove('rollTask')  # noqa: F821
-        self.mainLoop = taskMgr.add(self._roll_task, 'rollTask')  # noqa: F821
+        self.taskMgr.remove('rollTask')
+        self.mainLoop = self.taskMgr.add(self._roll_task, 'rollTask')
 
     def _roll_task(self, task):
-        dt = globalClock.getDt()  # noqa: F821
+        dt = builtins.globalClock.getDt()
         if dt > 0.2:
             return task.cont
 
@@ -144,38 +145,38 @@ class NeneMaze(ShowBase):
         newRot = LRotationf(axis, 45.5 * dt * self._ball_v.length())
         self._ball.setQuat(prevRot * newRot)
 
-        if base.mouseWatcherNode.hasMouse():  # noqa: F821
-            mpos = base.mouseWatcherNode.getMouse()  # noqa: F821
+        if self.mouseWatcherNode.hasMouse():
+            mpos = self.mouseWatcherNode.getMouse()
             self._maze.setP(mpos.getY() * -10)
             self._maze.setR(mpos.getX() * 10)
         return task.cont
 
     def _wall_collide_handler(self, col_entry):
-        norm = col_entry.getSurfaceNormal(render) * -1  # noqa: F821
+        norm = col_entry.getSurfaceNormal(self.render) * -1
         cur_speed = self._ball_v.length()
         in_vec = self._ball_v / cur_speed
         vel_angle = norm.dot(in_vec)
-        hit_dir = col_entry.getSurfacePoint(render) - self._ball_root.getPos()  # noqa: F821
+        hit_dir = col_entry.getSurfacePoint(self.render) - self._ball_root.getPos()
         hit_dir.normalize()
         hit_angle = norm.dot(hit_dir)
 
         if vel_angle > 0 and hit_angle > 0.995:
             reflect_vec = (norm * norm.dot(in_vec * -1) * 2) + in_vec
             self._ball_v = reflect_vec * (cur_speed * (((1 - vel_angle) * 0.5) + 0.5))
-            disp = (col_entry.getSurfacePoint(render) - col_entry.getInteriorPoint(render))  # noqa: F821
+            disp = (col_entry.getSurfacePoint(self.render) - col_entry.getInteriorPoint(self.render))
             new_pos = self._ball_root.getPos() + disp
             self._ball_root.setPos(new_pos)
 
     def _ground_collide_handler(self, col_entry):
-        new_z = col_entry.getSurfacePoint(render).getZ()  # noqa: F821
+        new_z = col_entry.getSurfacePoint(self.render).getZ()
         self._ball_root.setZ(new_z + 0.4)
-        norm = col_entry.getSurfaceNormal(render)  # noqa: F821
+        norm = col_entry.getSurfaceNormal(self.render)
         accelSide = norm.cross(LVector3.up())
         self._accel_v = norm.cross(accelSide)
 
     def _lose_game(self, entry):
-        to_pos = entry.getInteriorPoint(render)  # noqa: F821
-        taskMgr.remove('rollTask')  # noqa: F821
+        to_pos = entry.getInteriorPoint(self.render)
+        self.taskMgr.remove('rollTask')
         Sequence(Parallel(LerpFunc(self._ball_root.setX, fromData=self._ball_root.getX(), toData=to_pos.getX(), duration=0.1),
                           LerpFunc(self._ball_root.setY, fromData=self._ball_root.getY(), toData=to_pos.getY(), duration=0.1),
                           LerpFunc(self._ball_root.setZ, fromData=self._ball_root.getZ(), toData=self._ball_root.getZ() - 0.9, duration=0.2)),
@@ -183,9 +184,9 @@ class NeneMaze(ShowBase):
 
     def _win_game(self, entry):
         self.title.setText('ゴール！！')
-        _ = entry.getInteriorPoint(render)  # noqa: F821
+        _ = entry.getInteriorPoint(self.render)
         self._ball_root.hide()
-        taskMgr.remove('rollTask')  # noqa: F821
+        self.taskMgr.remove('rollTask')
 
 
 def main():
